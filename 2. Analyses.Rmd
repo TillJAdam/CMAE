@@ -1,0 +1,309 @@
+---
+title: "Main analyses"
+author: "Till Julius Adam"
+date: "2025-06-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(readxl)
+library(lmerTest)
+library(broom.mixed)
+library(dplyr)
+library(purrr)
+library(tibble)
+library(writexl)
+library(performance)
+library(nlme)
+library(ggplot2)
+
+SATIETY_long <- read_excel("SATIETY_long.xlsx")
+SATIETY_long$ID <- as.factor(SATIETY_long$ID)
+SATIETY_long$Med_Status <- ifelse(SATIETY_long$Med_Status == "AP Naive", "naive", "exposed")
+SATIETY_long$Med_Status <- factor(SATIETY_long$Med_Status, levels = c("naive", "exposed"))
+```
+
+
+Sample
+```{r}
+#ids <- SATIETY_long$ID[SATIETY_long$Time == 12 & !is.na(SATIETY_long$Weight)]
+#SATIETY_long <- SATIETY_long[SATIETY_long$ID %in% ids, ]
+
+#SATIETY_long <- subset(SATIETY_long, Med_Status == "naive")
+#SATIETY_long <- subset(SATIETY_long, Med_Status == "exposed")
+
+#length(unique(SATIETY_long$ID)))
+```
+
+Table 3 Analyses
+```{r, warning=FALSE}
+outcomes <- c("Weight", "Fat_Mass", "Lean_Mass", "BMI", "BMI_Z_Score",
+              "Glucose", "Insulin", "HOMA",
+              "Cholesterol", "Non_HDL", "LDL", "HDL", "Triglycerides")
+
+domains <- list(
+  "Body composition" = c("Weight", "Fat_Mass", "Lean_Mass", "BMI", "BMI_Z_Score"),
+  "Glucose Metabolism" = c("Glucose", "Insulin", "HOMA"),
+  "Lipid Metabolism" = c("Cholesterol", "Non_HDL", "LDL", "Triglycerides", "HDL")
+)
+
+run_models <- function(data, label_time) {
+  map_dfr(outcomes, function(var) {
+    formula <- as.formula(paste0(var, " ~ 1 + Time + Sex + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)"))
+    model <- lmer(formula, data = data, REML = FALSE)
+
+    est <- tidy(model, effects = "fixed") %>% filter(term == "Time")
+    varcomp <- as.data.frame(VarCorr(model)) %>%
+      filter(grp %in% c("ID", "Residual"), is.na(var2) | var1 == var2)
+
+    ci_low  <- est$estimate - 1.96 * est$std.error
+    ci_high <- est$estimate + 1.96 * est$std.error
+    beta_ci <- sprintf("%.2f (%.2f, %.2f)", est$estimate, ci_low, ci_high)
+    total_change <- est$estimate * label_time
+    total_low    <- ci_low * label_time
+    total_high   <- ci_high * label_time
+    total_ci     <- sprintf("%.2f \n(%.2f, %.2f)", total_change, total_low, total_high)
+
+    tibble(
+      Time = label_time,
+      Outcome = var,
+      `Total Mean Change` = total_ci,
+      beta = beta_ci,
+      `Std Error` = round(est$std.error, 2),
+      `t-statistic` = round(est$statistic, 2),
+      `p-value` = round(est$p.value, 4),
+      `Random Intercept Variance` = round(varcomp$vcov[varcomp$grp == "ID" & varcomp$var1 == "(Intercept)"], 2),
+      `Random Time Variance` = round(varcomp$vcov[varcomp$grp == "ID" & varcomp$var1 == "Time"], 2),
+      `Random Residual Variance` = round(varcomp$vcov[varcomp$grp == "Residual"], 2)
+    )
+  })
+}
+
+results_3mo  <- run_models(SATIETY_long %>% filter(Time %in% 0:3), label_time = 3)
+results_12mo <- run_models(SATIETY_long, label_time = 12)
+
+add_domain <- function(df) {
+  df %>%
+    mutate(
+      Domain = case_when(
+        Outcome %in% domains$`Body composition` ~ "Body composition",
+        Outcome %in% domains$`Glucose Metabolism` ~ "Glucose Metabolism",
+        Outcome %in% domains$`Lipid Metabolism` ~ "Lipid Metabolism"
+      )
+    )
+}
+
+results_3mo  <- add_domain(results_3mo)
+results_12mo <- add_domain(results_12mo)
+
+results <- full_join(results_3mo, results_12mo, by = c("Domain", "Outcome"), suffix = c("_3mo", "_12mo")) %>%
+  select(Domain, Outcome,
+         `Total Mean Change_3mo`, beta_3mo, `p-value_3mo`, 
+         `Random Intercept Variance_3mo`, `Random Time Variance_3mo`, `Random Residual Variance_3mo`,
+         `Total Mean Change_12mo`, beta_12mo, `p-value_12mo`, 
+         `Random Intercept Variance_12mo`, `Random Time Variance_12mo`, `Random Residual Variance_12mo`)
+
+outcome_order <- unlist(domains)
+
+results <- results %>%
+  mutate(
+    Outcome = factor(Outcome, levels = outcome_order)
+  ) %>%
+  arrange(Domain, Outcome)
+
+final_table <- results
+final_table[] <- lapply(final_table, function(x) if (is.numeric(x)) format(x, nsmall = 2, scientific = FALSE) else as.character(x))
+
+final_table
+
+final_table[] <- lapply(final_table, function(x) if (is.numeric(x)) format(x, nsmall = 2, scientific = FALSE) else as.character(x))
+
+insert_after <- which(final_table$Outcome %in% c("BMI_Z_Score", "HOMA", "HDL"))
+empty_row <- as.list(setNames(rep("", ncol(final_table)), names(final_table)))
+
+for (i in rev(insert_after)) {
+  final_table <- add_row(final_table, !!!empty_row, .after = i)
+}
+
+final_table
+```
+
+
+Table 3 AP specific
+```{r, warning=FALSE}
+groups <- list(
+  "Aripiprazole" = subset(SATIETY_long, Antipsychotic == "APZ"),
+  "Olanzapine"   = subset(SATIETY_long, Antipsychotic == "OLZ"),
+  "Quetiapine"   = subset(SATIETY_long, Antipsychotic == "QTP"),
+  "Risperidone"  = subset(SATIETY_long, Antipsychotic == "RIS")
+)
+
+outcomes <- c("Weight", "Fat_Mass", "Lean_Mass", "BMI", "BMI_Z_Score",
+              "Glucose", "Insulin", "HOMA", "Cholesterol", "Non_HDL",
+              "LDL", "Triglycerides", "HDL")
+
+extract_time_result <- function(model, months) {
+  est <- tidy(model, effects = "fixed") %>% filter(term == "Time")
+  if (nrow(est) == 0) return(c("", "", "", ""))
+  
+  beta <- est$estimate
+  se   <- est$std.error
+  ci_l <- beta - 1.96 * se
+  ci_h <- beta + 1.96 * se
+  pval <- format(round(est$p.value, 4), nsmall = 4)
+
+  rate_ci   <- sprintf("%.2f (%.2f, %.2f)", round(beta, 2), round(ci_l, 2), round(ci_h, 2))
+  total_beta <- beta * months
+  total_ci_l <- ci_l * months
+  total_ci_h <- ci_h * months
+  total_ci   <- sprintf("%.2f \n(%.2f, %.2f)", round(total_beta, 2), round(total_ci_l, 2), round(total_ci_h, 2))
+
+  c(rate_ci, pval, total_ci)
+}
+
+
+results <- map_dfr(names(groups), function(group) {
+  data_all <- groups[[group]]
+  data_03  <- subset(data_all, Time %in% 0:3)
+  map_dfr(outcomes, function(outcome) {
+    model_all <- lmer(as.formula(paste0(outcome, " ~ Time + Sex + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)")), 
+                      data = data_all, REML = FALSE)
+    model_03  <- lmer(as.formula(paste0(outcome, " ~ Time + Sex + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)")), 
+                      data = data_03,  REML = FALSE)
+    
+    res_03  <- extract_time_result(model_03, months = 3)
+    res_all <- extract_time_result(model_all, months = 12)
+
+    tibble(
+      AP = group,
+      Outcome = outcome,
+     `Total_Change_0_3` = res_03[3],
+      `Estimate_0_3` = res_03[1],
+      `p_0_3`        = res_03[2],
+      `Total_Change_ALL` = res_all[3],
+      `Estimate_ALL` = res_all[1],
+      `p_ALL`        = res_all[2]
+    )
+  })
+})
+
+
+insert_after <- which(results$Outcome %in% c("BMI_Z_Score", "HOMA", "HDL"))
+empty_row <- as.list(setNames(rep("", ncol(results)), names(results)))
+
+for (i in rev(insert_after)) {
+  results <- add_row(results, !!!empty_row, .after = i)
+}
+
+insert_after <- which(results$Outcome %in% c("HDL"))
+empty_row <- as.list(setNames(rep("", ncol(results)), names(results)))
+
+for (i in rev(insert_after)) {
+  results <- add_row(results, !!!empty_row, .after = i)
+}
+
+
+results
+```
+
+
+Table 4 analyses
+```{r, warning=FALSE}
+groups <- list(
+  "Total" = SATIETY_long,
+  "APZ"   = subset(SATIETY_long, Antipsychotic == "APZ"),
+  "OLZ"   = subset(SATIETY_long, Antipsychotic == "OLZ"),
+  "QTP"   = subset(SATIETY_long, Antipsychotic == "QTP"),
+  "RIS"   = subset(SATIETY_long, Antipsychotic == "RIS")
+)
+
+outcomes <- c("Glucose", "Insulin", "HOMA",
+              "Cholesterol", "Non_HDL", "Triglycerides",
+              "LDL", "HDL")
+
+predictors <- list(
+  "Weight" = "Weight",
+  "Fat_Mass" = "Fat_Mass"
+)
+
+format_time <- function(model) {
+  est <- tidy(model, effects = "fixed") %>% dplyr::filter(term == "Time")
+  if (nrow(est) == 0) return(list(effect = "", p = ""))
+  ci_low  <- est$estimate - 1.96 * est$std.error
+  ci_high <- est$estimate + 1.96 * est$std.error
+  fmt <- function(x) {
+    if (x < -0.009) sprintf("%.2f", x)
+    else if (x > 0.009) sprintf("%.2f", x)
+    else if (x < 0) "<-0.01" else "<0.01"
+  }
+  effect <- sprintf("%s (%s, %s)", fmt(est$estimate), fmt(ci_low), fmt(ci_high))
+  pval   <- sprintf("%.4f", est$p.value)
+  list(effect = effect, p = pval)
+}
+
+results <- purrr::map_dfr(names(groups), function(group_name) {
+  data <- groups[[group_name]]
+  purrr::map_dfr(outcomes, function(outcome) {
+    f_weight   <- as.formula(paste0(outcome, " ~ Time + Weight + Sex + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)"))
+    f_fatmass  <- as.formula(paste0(outcome, " ~ Time + Fat_Mass + Sex + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)"))
+    m_w <- lmer(f_weight,  data = data, REML = FALSE)
+    m_f <- lmer(f_fatmass, data = data, REML = FALSE)
+    wt <- format_time(m_w)
+    fm <- format_time(m_f)
+    tibble::tibble(
+      Group = group_name,
+      Outcome = outcome,
+      `Weight (Time)` = wt$effect,
+      `p-value (Weight, Time)` = wt$p,
+      `Fat_Mass (Time)` = fm$effect,
+      `p-value (Fat_Mass, Time)` = fm$p
+    )
+  })
+})
+
+results
+```
+
+
+
+
+Table 5 analyses
+```{r, warning=FALSE}
+predictors <- c("HOMA", "Glucose", "LDL", "HDL", "Triglycerides")
+outcomes   <- c("Weight", "Fat_Mass")
+
+format_result <- function(model, term) {
+  est <- tidy(model, effects = "fixed") %>% dplyr::filter(term == !!term)
+  if (nrow(est) == 0) return(list(effect = "", p = ""))
+  ci_low  <- est$estimate - 1.96 * est$std.error
+  ci_high <- est$estimate + 1.96 * est$std.error
+  fmt <- function(x) {
+    if (x < -0.009) sprintf("%.2f", x)
+    else if (x > 0.009) sprintf("%.2f", x)
+    else if (x < 0) "<-0.01" else "<0.01"
+  }
+  effect <- sprintf("%s (%s, %s)", fmt(est$estimate), fmt(ci_low), fmt(ci_high))
+  pval   <- sprintf("%.4f", est$p.value)
+  list(effect = effect, p = pval)
+}
+
+results <- purrr::map_dfr(names(groups), function(group_name) {
+  data <- groups[[group_name]]
+  purrr::map_dfr(predictors, function(pred) {
+    row <- tibble::tibble(Group = group_name, Predictor = pred)
+    for (outcome in outcomes) {
+      formula <- as.formula(paste0(outcome, " ~ Time + ", paste(predictors, collapse = " + "), " + (1 + Time | ID)"))
+      model <- lmer(formula, data = data, REML = FALSE)
+      fr <- format_result(model, pred)
+      row[[outcome]] <- fr$effect
+      row[[paste0("p-value (", outcome, ")")]] <- fr$p
+    }
+    row
+  })
+})
+
+results
+```
+

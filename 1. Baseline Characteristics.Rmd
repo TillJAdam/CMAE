@@ -1,0 +1,214 @@
+---
+title: "Baseline characteristics"
+author: "Till Julius Adam"
+date: "2025-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(pander)
+library(effsize)
+library(pwr)
+library(gtsummary)
+library(gt)
+library(car)
+library(flextable)
+library(officer)
+library(readxl)
+library(writexl)
+library(survival)
+library(lavaan)
+library(survminer)
+library(gtsummary)
+library(dplyr)
+library(rstatix)
+library(effectsize)
+library(effectsize)
+library(dplyr)
+library(glue)
+```
+
+```{r}
+SATIETY <- read_excel("SATIETY.xlsx")
+
+SATIETY$Data_3mo <- ifelse(!is.na(SATIETY$`Weight 3 mo`), 1, 0)
+SATIETY$Data_6mo <- ifelse(!is.na(SATIETY$`Weight 6 mo`), 1, 0)
+SATIETY$Data_9mo <- ifelse(!is.na(SATIETY$`Weight 9 mo`), 1, 0)
+SATIETY$Data_12mo <- ifelse(!is.na(SATIETY$`Weight 12 mo`), 1, 0)
+
+SATIETY$Med_Status <- ifelse(SATIETY$Med_Status == "AP Naive", "naive", "exposed")
+SATIETY$Med_Status <- factor(SATIETY$Med_Status, levels = c("naive", "exposed"))
+
+SATIETY$SES <- as.numeric(SATIETY$SES)
+SATIETY$Days_to_Baseline <- as.numeric(SATIETY$Days_to_Baseline)
+
+SATIETY$Months_AP_Old[SATIETY$Months_AP_Old == 0 & SATIETY$Med_Status == "naive"] <- NA
+SATIETY$Months_off_AP[SATIETY$Months_off_AP == 0 & SATIETY$Med_Status == "naive"] <- NA
+sum(!is.na(SATIETY$Months_AP_Old))
+sum(!is.na(SATIETY$Months_off_AP))
+```
+
+Descriptive Characteristics Table
+```{r}
+generate_characteristics_table <- function(data) {
+  data %>%
+    select(
+      Sex, Baseline_Age, Antipsychotic, Pubertal_Status, Race, Med_Status, Diagnosis_Class, 
+      Data_3mo, Data_6mo, Data_9mo, Data_12mo,
+      SES, Days_to_Baseline, Months_AP_Old, Months_off_AP,
+      AP_Dose_Baseline_CPZ_eq, AP_Dose_4wk_CPZ_eq, AP_Dose_8wk_CPZ_eq, AP_Dose_3mo_CPZ_eq, AP_Dose_6mo_CPZ_eq,
+      AP_Dose_9mo_CPZ_eq, AP_Dose_12mo_CPZ_eq, Patient_Avg_CPZ_eq, AP_Dose_Mean, IP_OP
+    ) %>%
+    
+    mutate(
+      Sex = factor(Sex, levels = c("f", "m")),
+      Pubertal_Status = factor(Pubertal_Status, levels = c("pre", "post")),
+      Race = factor(Race, levels = c(1:5), labels = c("white", "black", "hispanic", "asian", "other")),
+      Antipsychotic = factor(Antipsychotic, levels = c("QTP", "OLZ", "RIS", "APZ")),
+      Med_Status = factor(Med_Status, levels = c("naive", "exposed")),
+      Diagnosis_Class = factor(Diagnosis_Class, levels = c("SCZ-S", "Aggr", "Mood"))
+    ) %>%
+    tbl_summary(
+      by = Antipsychotic, 
+      include = everything(),
+      statistic = list(
+        all_categorical() ~ "{n} ({p})",
+        all_continuous() ~ "{mean} ({sd}) [{min}, {max}]"
+      ),
+      digits = list(
+        all_categorical() ~ c(0, 1),
+        all_continuous() ~ c(2,2,2,2)
+      ),
+        type = list(
+          Baseline_Age ~ "continuous",
+          SES ~ "continuous",
+          Days_to_Baseline ~ "continuous",
+          Months_AP_Old ~ "continuous",
+          Months_off_AP ~ "continuous",
+          AP_Dose_Baseline_CPZ_eq ~ "continuous",
+          AP_Dose_4wk_CPZ_eq ~ "continuous",
+          AP_Dose_8wk_CPZ_eq ~ "continuous",
+          AP_Dose_3mo_CPZ_eq ~ "continuous",
+          AP_Dose_6mo_CPZ_eq ~ "continuous",
+          AP_Dose_9mo_CPZ_eq ~ "continuous",
+          AP_Dose_12mo_CPZ_eq ~ "continuous",
+          Patient_Avg_CPZ_eq ~ "continuous",
+          AP_Dose_Mean ~ "continuous"
+          ),
+      missing = "no"
+    ) %>%
+    add_overall() %>%
+    modify_header(label ~ "Characteristic") %>%
+    modify_table_body(
+      ~ .x %>% filter(!(
+        (variable == "Pubertal Status" & label == "pre") |
+        (variable == "Sex" & label == "f")
+      ))
+    )
+}
+
+characteristics_table <- generate_characteristics_table(SATIETY)
+characteristics_df <- as_tibble(characteristics_table)
+```
+
+```{r}
+cat_vars <- c("Sex", "Pubertal_Status", "Race", "Med_Status", "Diagnosis_Class", 
+              "Data_3mo", "Data_6mo", "Data_9mo", "Data_12mo", "IP_OP")
+
+cont_vars <- c("Baseline_Age","SES","Days_to_Baseline","Months_AP_Old","Months_off_AP",
+               "AP_Dose_Baseline_CPZ_eq", "AP_Dose_4wk_CPZ_eq", "AP_Dose_8wk_CPZ_eq",
+               "AP_Dose_3mo_CPZ_eq", "AP_Dose_6mo_CPZ_eq", "AP_Dose_9mo_CPZ_eq",
+               "AP_Dose_12mo_CPZ_eq", "Patient_Avg_CPZ_eq")
+
+
+characteristics_df$Statistic <- NA
+characteristics_df$P <- NA
+
+SATIETY$Antipsychotic <- factor(SATIETY$Antipsychotic, levels = c("QTP", "OLZ", "RIS", "APZ"))
+
+SATIETY$Sex <- factor(SATIETY$Sex, levels = c("f", "m"))
+SATIETY$Pubertal_Status <- factor(SATIETY$Pubertal_Status, levels = c("pre", "post"))
+SATIETY$Race <- factor(SATIETY$Race, levels = 1:5, labels = c("white", "black", "hispanic", "asian", "other"))
+SATIETY$Med_Status <- factor(SATIETY$Med_Status, levels = c("naive", "exposed"))
+SATIETY$Diagnosis_Class <- factor(SATIETY$Diagnosis_Class, levels = c("SCZ-S", "Aggr", "Mood"))
+
+SATIETY$Data_3mo <- factor(SATIETY$Data_3mo, levels = c(0, 1))
+SATIETY$Data_6mo <- factor(SATIETY$Data_6mo, levels = c(0, 1))
+SATIETY$Data_9mo <- factor(SATIETY$Data_9mo, levels = c(0, 1))
+SATIETY$Data_12mo <- factor(SATIETY$Data_12mo, levels = c(0, 1))
+
+for (var in cat_vars) {
+  tab <- table(SATIETY[[var]], SATIETY$Antipsychotic)
+  test <- chisq.test(tab, correct = FALSE)
+  v <- cramers_v(tab, ci = NULL)$Cramers_v
+  n <- sum(tab)
+  se <- sqrt((1 - v^2) / n)
+  ci_low <- max(0, v - 1.96 * se)
+  ci_high <- min(1, v + 1.96 * se)
+  stat_str <- sprintf("%.2f (%.2f, %.2f)", v, ci_low, ci_high)
+  p_val <- sprintf("%.4f", test$p.value)
+  characteristics_df$Statistic[characteristics_df$Characteristic == var] <- stat_str
+  characteristics_df$P[characteristics_df$Characteristic == var] <- p_val
+}
+
+for (var in cont_vars) {
+  formula <- as.formula(paste(var, "~ Antipsychotic"))
+  aov_res <- aov(formula, data = SATIETY)
+  eta <- eta_squared(aov_res, ci = NULL)$Eta2[1]
+  n <- nrow(SATIETY)
+  se <- sqrt((1 - eta^2) / n)
+  ci_low <- max(0, eta - 1.96 * se)
+  ci_high <- min(1, eta + 1.96 * se)
+  stat_str <- sprintf("%.2f (%.2f, %.2f)", eta, ci_low, ci_high)
+  p_val <- sprintf("%.4f", summary(aov_res)[[1]][["Pr(>F)"]][1])
+  characteristics_df$Statistic[characteristics_df$Characteristic == var] <- stat_str
+  characteristics_df$P[characteristics_df$Characteristic == var] <- p_val
+}
+```
+
+
+Write to word using flextable
+```{r}
+set_flextable_defaults(
+  font.family = "Arial",
+  font.size = 9, 
+  padding.bottom = 3,
+  padding.top = 3,
+  padding.left = 2,
+  padding.right = 2,
+  text.align = "left",
+  line_spacing = 2
+)
+
+ft <- flextable(characteristics_df) %>%
+  theme_vanilla() %>%
+  border_outer(border = fp_border(color = "black", width = 1)) %>% 
+  border_remove() %>%  
+  hline_top(border = fp_border(color = "black", width = 1), part = "header") %>%  
+  hline(border = fp_border(color = "black", width = 1), part = "header") %>%
+  align(align = "left", j = 1, part = "all") %>% 
+  align(align = "center", part = "header") %>% 
+  bold(part = "header") %>% 
+  width(j = 1, width = 1.75) %>% 
+  width(j = 2, width = 1) %>%
+  set_caption("Table 2\n*Categorical Variables Leptin*") %>%
+  add_footer_lines("Note. Include general, specific, and probability notes here.")
+
+margins <- page_mar(
+  bottom = 1,
+  top = 1,
+  right = 1,
+  left = 1
+)
+format_table_wide <- prop_section(
+  page_margins = margins
+)
+
+save_as_docx(ft, 
+             path = "Table 1_Baseline Characteristics.docx",
+             pr_section = format_table_wide)
+```
