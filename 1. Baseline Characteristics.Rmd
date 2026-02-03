@@ -7,29 +7,12 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(ggplot2)
 library(dplyr)
-library(tidyr)
-library(pander)
-library(effsize)
-library(pwr)
 library(gtsummary)
-library(gt)
-library(car)
 library(flextable)
 library(officer)
 library(readxl)
-library(writexl)
-library(survival)
-library(lavaan)
-library(survminer)
-library(gtsummary)
-library(dplyr)
-library(rstatix)
 library(effectsize)
-library(effectsize)
-library(dplyr)
-library(glue)
 ```
 
 # Note to reviewrs: 
