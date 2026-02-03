@@ -19,11 +19,16 @@ library(performance)
 library(nlme)
 library(ggplot2)
 
-SATIETY_long <- read_excel("SATIETY_long.xlsx")
+SATIETY_long <- read_excel("SATIETY_long_simulated.xlsx")
 SATIETY_long$ID <- as.factor(SATIETY_long$ID)
 SATIETY_long$Med_Status <- ifelse(SATIETY_long$Med_Status == "AP Naive", "naive", "exposed")
 SATIETY_long$Med_Status <- factor(SATIETY_long$Med_Status, levels = c("naive", "exposed"))
 ```
+
+# Note to reviewrs: 
+This code is for the purposes of peer review. 
+Please note that this code is running on simulated data. 
+Hence, the results will not match with the results in the manuscript submitted to Nature Mental Health.
 
 
 Sample

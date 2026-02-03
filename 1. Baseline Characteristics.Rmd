@@ -32,8 +32,14 @@ library(dplyr)
 library(glue)
 ```
 
+# Note to reviewrs: 
+This code is for the purposes of peer review. 
+Please note that this code is running on simulated data. 
+Hence, the results will not match with the results in the manuscript submitted to Nature Mental Health.
+
+
 ```{r}
-SATIETY <- read_excel("SATIETY.xlsx")
+SATIETY <- read_excel("SATIETY_simulated.xlsx")
 
 SATIETY$Data_3mo <- ifelse(!is.na(SATIETY$`Weight 3 mo`), 1, 0)
 SATIETY$Data_6mo <- ifelse(!is.na(SATIETY$`Weight 6 mo`), 1, 0)
@@ -45,11 +51,6 @@ SATIETY$Med_Status <- factor(SATIETY$Med_Status, levels = c("naive", "exposed"))
 
 SATIETY$SES <- as.numeric(SATIETY$SES)
 SATIETY$Days_to_Baseline <- as.numeric(SATIETY$Days_to_Baseline)
-
-SATIETY$Months_AP_Old[SATIETY$Months_AP_Old == 0 & SATIETY$Med_Status == "naive"] <- NA
-SATIETY$Months_off_AP[SATIETY$Months_off_AP == 0 & SATIETY$Med_Status == "naive"] <- NA
-sum(!is.na(SATIETY$Months_AP_Old))
-sum(!is.na(SATIETY$Months_off_AP))
 ```
 
 Descriptive Characteristics Table
@@ -60,8 +61,6 @@ generate_characteristics_table <- function(data) {
       Sex, Baseline_Age, Antipsychotic, Pubertal_Status, Race, Med_Status, Diagnosis_Class, 
       Data_3mo, Data_6mo, Data_9mo, Data_12mo,
       SES, Days_to_Baseline, Months_AP_Old, Months_off_AP,
-      AP_Dose_Baseline_CPZ_eq, AP_Dose_4wk_CPZ_eq, AP_Dose_8wk_CPZ_eq, AP_Dose_3mo_CPZ_eq, AP_Dose_6mo_CPZ_eq,
-      AP_Dose_9mo_CPZ_eq, AP_Dose_12mo_CPZ_eq, Patient_Avg_CPZ_eq, AP_Dose_Mean, IP_OP
     ) %>%
     
     mutate(
@@ -88,16 +87,7 @@ generate_characteristics_table <- function(data) {
           SES ~ "continuous",
           Days_to_Baseline ~ "continuous",
           Months_AP_Old ~ "continuous",
-          Months_off_AP ~ "continuous",
-          AP_Dose_Baseline_CPZ_eq ~ "continuous",
-          AP_Dose_4wk_CPZ_eq ~ "continuous",
-          AP_Dose_8wk_CPZ_eq ~ "continuous",
-          AP_Dose_3mo_CPZ_eq ~ "continuous",
-          AP_Dose_6mo_CPZ_eq ~ "continuous",
-          AP_Dose_9mo_CPZ_eq ~ "continuous",
-          AP_Dose_12mo_CPZ_eq ~ "continuous",
-          Patient_Avg_CPZ_eq ~ "continuous",
-          AP_Dose_Mean ~ "continuous"
+          Months_off_AP ~ "continuous"
           ),
       missing = "no"
     ) %>%
@@ -119,10 +109,8 @@ characteristics_df <- as_tibble(characteristics_table)
 cat_vars <- c("Sex", "Pubertal_Status", "Race", "Med_Status", "Diagnosis_Class", 
               "Data_3mo", "Data_6mo", "Data_9mo", "Data_12mo", "IP_OP")
 
-cont_vars <- c("Baseline_Age","SES","Days_to_Baseline","Months_AP_Old","Months_off_AP",
-               "AP_Dose_Baseline_CPZ_eq", "AP_Dose_4wk_CPZ_eq", "AP_Dose_8wk_CPZ_eq",
-               "AP_Dose_3mo_CPZ_eq", "AP_Dose_6mo_CPZ_eq", "AP_Dose_9mo_CPZ_eq",
-               "AP_Dose_12mo_CPZ_eq", "Patient_Avg_CPZ_eq")
+cont_vars <- c("Baseline_Age","SES","Days_to_Baseline","Months_AP_Old","Months_off_AP"
+               )
 
 
 characteristics_df$Statistic <- NA
