@@ -1,5 +1,6 @@
 # R Package Dependencies
-# SATIETY Analysis Project
+# SATIETY: Metabolic dysregulation during long-term antipsychotic treatment in youth: 
+distinguishing body composition-mediated and drug-induced effects
 # Versions as of: 2025-11-22
 
 ================================================================================
