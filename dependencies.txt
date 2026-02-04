@@ -3,6 +3,10 @@
 distinguishing body composition-mediated and drug-induced effects
 # Versions as of: 2025-11-22
 
+# Note that the code should also run with updated versions of the required packages. 
+# Hence, try simply running install.packages("PACKAGENAME") to install each package in RStudio. 
+# For example, install.packages("dplyr")
+
 ================================================================================
 ENVIRONMENT
 ================================================================================
