@@ -1,6 +1,5 @@
 # R Package Dependencies
-# SATIETY: Metabolic dysregulation during long-term antipsychotic treatment in youth: 
-distinguishing body composition-mediated and drug-induced effects
+# SATIETY: Metabolic dysregulation during long-term antipsychotic treatment in youth: distinguishing body composition-mediated and drug-induced effects
 # Versions as of: 2025-11-22
 
 # Note that the code should also run with updated versions of the required packages. 
