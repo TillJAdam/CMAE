@@ -15,6 +15,6 @@ Written and shared by Till Julius Adam.
     -> Expected time to run both scripts: <2 minutes
 
 ## Instructions for use
-Note that since this repository is for code peer review, the .xlsx files are <u>simulations</u> of the data from the SATIETY study, not the original data.  
-Hence, the <u>results will not match</u> the results in the submitted manuscript.  
+Note that since this repository is for code peer review, the .xlsx files are ***simulations*** of the data from the SATIETY study, not the original data.
+Hence, the ***results will not match*** the results in the submitted manuscript.
 To replicate this study, similar longitudinal data would have to be collected, and the code would be able to run on it.
