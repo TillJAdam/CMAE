@@ -38,7 +38,7 @@ Sample
 #length(unique(SATIETY_long$ID)))
 ```
 
-Table 3 Analyses
+Table 2 Analyses
 ```{r, warning=FALSE}
 outcomes <- c("Weight", "Fat_Mass", "Lean_Mass", "BMI", "BMI_Z_Score",
               "Glucose", "Insulin", "HOMA",
@@ -52,7 +52,7 @@ domains <- list(
 
 run_models <- function(data, label_time) {
   map_dfr(outcomes, function(var) {
-    formula <- as.formula(paste0(var, " ~ 1 + Time + Sex + Pubertal_Status + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)"))
+    formula <- as.formula(paste0(var, " ~ 1 + Time + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)"))
     model <- lmer(formula, data = data, REML = FALSE)
 
     est <- tidy(model, effects = "fixed") %>% filter(term == "Time")
@@ -132,7 +132,7 @@ final_table
 ```
 
 
-Table 3 AP specific
+Table 2 AP specific
 ```{r, warning=FALSE}
 groups <- list(
   "Aripiprazole" = subset(SATIETY_long, Antipsychotic == "APZ"),
@@ -169,9 +169,9 @@ results <- map_dfr(names(groups), function(group) {
   data_all <- groups[[group]]
   data_03  <- subset(data_all, Time %in% 0:3)
   map_dfr(outcomes, function(outcome) {
-    model_all <- lmer(as.formula(paste0(outcome, " ~ Time + Sex + Pubertal_Status + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)")), 
+    model_all <- lmer(as.formula(paste0(outcome, " ~ Time + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)")), 
                       data = data_all, REML = FALSE)
-    model_03  <- lmer(as.formula(paste0(outcome, " ~ Time + Sex + Pubertal_Status + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)")), 
+    model_03  <- lmer(as.formula(paste0(outcome, " ~ Time + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)")), 
                       data = data_03,  REML = FALSE)
     
     res_03  <- extract_time_result(model_03, months = 3)
@@ -210,7 +210,7 @@ results
 ```
 
 
-Table 4 analyses
+Table 3 analyses - Body composition-adjuted
 ```{r, warning=FALSE}
 groups <- list(
   "Total" = SATIETY_long,
@@ -247,8 +247,8 @@ format_time <- function(model) {
 results <- purrr::map_dfr(names(groups), function(group_name) {
   data <- groups[[group_name]]
   purrr::map_dfr(outcomes, function(outcome) {
-    f_weight   <- as.formula(paste0(outcome, " ~ Time + Weight + Sex + Pubertal_Status + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)"))
-    f_fatmass  <- as.formula(paste0(outcome, " ~ Time + Fat_Mass + Sex + Pubertal_Status + Race + Med_Status + Diagnosis_Class + (1 + Time | ID)"))
+    f_weight   <- as.formula(paste0(outcome, " ~ Time + Weight + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)"))
+    f_fatmass  <- as.formula(paste0(outcome, " ~ Time + Fat_Mass + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)"))
     m_w <- lmer(f_weight,  data = data, REML = FALSE)
     m_f <- lmer(f_fatmass, data = data, REML = FALSE)
     wt <- format_time(m_w)
@@ -268,15 +268,12 @@ results
 ```
 
 
-
-
-Table 5 analyses
+Table 4 analyses - Body composition-dependent
 ```{r, warning=FALSE}
-predictors <- c("HOMA", "Glucose", "LDL", "HDL", "Triglycerides")
-outcomes   <- c("Weight", "Fat_Mass")
+outcomes <- c("HOMA", "Triglycerides", "LDL", "Glucose", "HDL")
 
-format_result <- function(model, term) {
-  est <- tidy(model, effects = "fixed") %>% dplyr::filter(term == !!term)
+format_term <- function(model, term_name) {
+  est <- tidy(model, effects = "fixed") %>% dplyr::filter(term == term_name)
   if (nrow(est) == 0) return(list(effect = "", p = ""))
   ci_low  <- est$estimate - 1.96 * est$std.error
   ci_high <- est$estimate + 1.96 * est$std.error
@@ -291,17 +288,34 @@ format_result <- function(model, term) {
 }
 
 results <- purrr::map_dfr(names(groups), function(group_name) {
-  data <- groups[[group_name]]
-  purrr::map_dfr(predictors, function(pred) {
-    row <- tibble::tibble(Group = group_name, Predictor = pred)
-    for (outcome in outcomes) {
-      formula <- as.formula(paste0(outcome, " ~ Time + ", paste(predictors, collapse = " + "), " + (1 + Time | ID)"))
-      model <- lmer(formula, data = data, REML = FALSE)
-      fr <- format_result(model, pred)
-      row[[outcome]] <- fr$effect
-      row[[paste0("p-value (", outcome, ")")]] <- fr$p
-    }
-    row
+  data_all <- groups[[group_name]]
+  data_03  <- subset(data_all, Time %in% 0:3)
+  purrr::map_dfr(outcomes, function(outcome) {
+    f_w <- as.formula(paste0(outcome, " ~ Time + Weight + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)"))
+    f_f <- as.formula(paste0(outcome, " ~ Time + Fat_Mass + Sex + Race + Med_Status + Diagnosis_Class + Baseline_Age + CPZ_eq + (1 + Time | ID)"))
+
+    m_w_3  <- lmer(f_w, data = data_03,  REML = FALSE)
+    m_f_3  <- lmer(f_f, data = data_03,  REML = FALSE)
+    m_w_12 <- lmer(f_w, data = data_all, REML = FALSE)
+    m_f_12 <- lmer(f_f, data = data_all, REML = FALSE)
+
+    w3  <- format_term(m_w_3,  "Weight")
+    f3  <- format_term(m_f_3,  "Fat_Mass")
+    w12 <- format_term(m_w_12, "Weight")
+    f12 <- format_term(m_f_12, "Fat_Mass")
+
+    tibble::tibble(
+      Group = group_name,
+      Outcome = outcome,
+      `Weight (3mo)`             = w3$effect,
+      `p-value (Weight, 3mo)`    = w3$p,
+      `Fat_Mass (3mo)`           = f3$effect,
+      `p-value (Fat_Mass, 3mo)`  = f3$p,
+      `Weight (12mo)`            = w12$effect,
+      `p-value (Weight, 12mo)`   = w12$p,
+      `Fat_Mass (12mo)`          = f12$effect,
+      `p-value (Fat_Mass, 12mo)` = f12$p
+    )
   })
 })
 
